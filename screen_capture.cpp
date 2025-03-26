@@ -6,14 +6,16 @@
 typedef ULONG PROPID;
 #endif
 
-#include "LogWrapper.h"
+// 包含GDI+头文件
 #include <gdiplus.h>
+#pragma comment(lib, "gdiplus.lib")
+
+// 然后包含其他头文件
+#include "LogWrapper.h"
 #include <memory>
 #include <algorithm>
 #include <objidl.h>
 #include "screen_capture.h"
-
-#pragma comment(lib, "gdiplus.lib")
 
 using namespace Gdiplus;
 
