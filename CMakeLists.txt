@@ -8,6 +8,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Windows特定设置
 add_compile_definitions(NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)
 
+# 查找nlohmann_json库
+find_package(nlohmann_json CONFIG REQUIRED)
+
 # 源文件
 set(SOURCES
         main.cpp
@@ -38,9 +41,10 @@ add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})
 # 包含目录设置
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
-# 链接Windows系统库
+# 链接Windows系统库和其他依赖
 target_link_libraries(${PROJECT_NAME} PRIVATE
-        gdi32 user32 gdiplus ws2_32 wininet wsock32 shlwapi crypt32 ole32 oleaut32 uuid comctl32
+        gdi32 user32 gdiplus ws2_32 wininet wsock32 shlwapi crypt32 ole32 oleaut32 uuid comctl32 d3d11 dxgi
+        nlohmann_json::nlohmann_json
 )
 
 # 配置文件复制
