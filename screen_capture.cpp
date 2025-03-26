@@ -1,30 +1,30 @@
-#include "screen_capture.h"
-#include "spdlog/spdlog.h"
+#include <windows.h>
+#include <objbase.h> // 提供PROPID定义
+
+// 如果PROPID仍未定义，手动定义它
+#ifndef PROPID
+typedef ULONG PROPID;
+#endif
+
+#include "LogWrapper.h"
 #include <gdiplus.h>
 #include <memory>
 #include <algorithm>
 #include <objidl.h>
+#include "screen_capture.h"
 
 #pragma comment(lib, "gdiplus.lib")
 
 using namespace Gdiplus;
-namespace fmt {
-    template<>
-    struct formatter<Gdiplus::Status> : formatter<int> {
-        auto format(const Gdiplus::Status& status, format_context& ctx) const {
-            return formatter<int>::format(static_cast<int>(status), ctx);
-        }
-    };
-}
 
-// RAII������GDI+
+// RAII包装器GDI+
 class GdiplusInitializer {
 public:
     GdiplusInitializer() {
         GdiplusStartupInput gdiplusStartupInput;
         Status status = GdiplusStartup(&token_, &gdiplusStartupInput, NULL);
         if (status != Ok) {
-            spdlog::error("GDI+��ʼ��ʧ��: {}", status);
+            logError_fmt("GDI+初始化失败: {}", static_cast<int>(status));
             initialized_ = false;
         }
         else {
@@ -46,30 +46,30 @@ private:
     bool initialized_;
 };
 
-// ��̬GDI+��ʼ����
+// 静态GDI+初始化器
 static GdiplusInitializer gdiplusInit;
 
-// ������������ȡJPEG������CLSID
+// 帮助函数获取JPEG编码器CLSID
 int GetEncoderClsid(const WCHAR* format, CLSID* pClsid) {
-    UINT num = 0;          // ����������
-    UINT size = 0;         // �����������С
+    UINT num = 0;          // 编码器数量
+    UINT size = 0;         // 编码器信息大小
 
-    // ��ȡͼ���������Ϣ
+    // 获取图像编码器信息
     GetImageEncodersSize(&num, &size);
     if (size == 0) {
         return -1;
     }
 
-    // �����ڴ�
+    // 分配内存
     ImageCodecInfo* pImageCodecInfo = (ImageCodecInfo*)(malloc(size));
     if (pImageCodecInfo == NULL) {
         return -1;
     }
 
-    // ��ȡ��������Ϣ
+    // 获取编码器信息
     GetImageEncoders(num, size, pImageCodecInfo);
 
-    // ����ָ����ʽ�ı�����
+    // 查找指定格式的编码器
     for (UINT i = 0; i < num; ++i) {
         if (wcscmp(pImageCodecInfo[i].MimeType, format) == 0) {
             *pClsid = pImageCodecInfo[i].Clsid;
@@ -84,13 +84,13 @@ int GetEncoderClsid(const WCHAR* format, CLSID* pClsid) {
 
 ScreenCapture::ScreenCapture() : game_window_(NULL), window_dc_(NULL), memory_dc_(NULL) {
     if (!gdiplusInit.isInitialized()) {
-        spdlog::error("GDI+��ʼ��ʧ�ܣ���Ļ���񽫲�����");
+        logError("GDI+初始化失败，屏幕捕获将不工作");
     }
     gdiplusToken_ = gdiplusInit.getToken();
 }
 
 ScreenCapture::~ScreenCapture() {
-    // ������Դ
+    // 清理资源
     if (memory_dc_) {
         DeleteDC(memory_dc_);
     }
@@ -102,37 +102,37 @@ ScreenCapture::~ScreenCapture() {
 bool ScreenCapture::initialize(const std::string& window_title) {
     window_title_ = window_title;
 
-    // ������Ϸ����
+    // 查找游戏窗口
     if (!findGameWindow()) {
-        spdlog::error("�Ҳ�����Ϸ����: {}", window_title);
+        logError_fmt("找不到游戏窗口: {}", window_title);
         return false;
     }
 
-    // ��ȡ����DC
+    // 获取窗口DC
     window_dc_ = GetDC(game_window_);
     if (!window_dc_) {
-        spdlog::error("��ȡ����DCʧ��");
+        logError("获取窗口DC失败");
         return false;
     }
 
-    // �����ڴ�DC
+    // 创建内存DC
     memory_dc_ = CreateCompatibleDC(window_dc_);
     if (!memory_dc_) {
-        spdlog::error("�����ڴ�DCʧ��");
+        logError("创建内存DC失败");
         ReleaseDC(game_window_, window_dc_);
         window_dc_ = NULL;
         return false;
     }
 
-    spdlog::info("��Ļ�����ʼ���ɹ���Ŀ�괰��: {}", window_title);
+    logInfo_fmt("屏幕捕获初始化成功，目标窗口: {}", window_title);
     return true;
 }
 
 bool ScreenCapture::findGameWindow() {
-    // ������Ϸ����
+    // 查找游戏窗口
     game_window_ = FindWindowA(NULL, window_title_.c_str());
     if (!game_window_) {
-        // ����ʹ�ò��ֱ���ƥ��
+        // 尝试使用部分标题匹配
         game_window_ = FindWindowA(NULL, NULL);
         char window_text[256];
 
@@ -149,17 +149,17 @@ bool ScreenCapture::findGameWindow() {
         return false;
     }
 
-    // ��ȡ���ھ���
+    // 获取窗口矩形
     GetWindowRect(game_window_, &window_rect_);
 
-    // ��鴰���Ƿ�ɼ�
+    // 检查窗口是否可见
     if (!IsWindowVisible(game_window_)) {
-        spdlog::error("��Ϸ���ڲ��ɼ�");
+        logError("游戏窗口不可见");
         game_window_ = NULL;
         return false;
     }
 
-    spdlog::info("�ҵ���Ϸ���ڣ����: {:x}, ��С: {}x{}",
+    logInfo_fmt("找到游戏窗口，句柄: {}, 大小: {}x{}",
         reinterpret_cast<uintptr_t>(game_window_),
         window_rect_.right - window_rect_.left,
         window_rect_.bottom - window_rect_.top);
@@ -168,38 +168,38 @@ bool ScreenCapture::findGameWindow() {
 }
 
 std::shared_ptr<CaptureResult> ScreenCapture::captureScreen(int quality) {
-    // ��鴰���Ƿ���Ч
+    // 检查窗口是否有效
     if (!isWindowValid()) {
-        spdlog::error("��Ч����Ϸ����");
+        logError("无效的游戏窗口");
         return nullptr;
     }
 
-    // ���´��ھ���
+    // 更新窗口矩形
     GetWindowRect(game_window_, &window_rect_);
 
-    // ���㴰�ڴ�С
+    // 计算窗口大小
     int width = window_rect_.right - window_rect_.left;
     int height = window_rect_.bottom - window_rect_.top;
 
-    // ����λͼ
+    // 创建位图
     HBITMAP bitmap = NULL;
     if (!captureWindowImage(bitmap, width, height)) {
-        spdlog::error("���񴰿�ͼ��ʧ��");
+        logError("捕获窗口图像失败");
         return nullptr;
     }
 
-    // ѹ��ΪJPEG
+    // 压缩为JPEG
     std::vector<uint8_t> jpeg_data = compressToJpeg(bitmap, width, height, quality);
 
-    // ����λͼ
+    // 清理位图
     cleanupBitmap(bitmap);
 
     if (jpeg_data.empty()) {
-        spdlog::error("JPEGѹ��ʧ��");
+        logError("JPEG压缩失败");
         return nullptr;
     }
 
-    // �������
+    // 创建结果
     auto result = std::make_shared<CaptureResult>();
     result->jpeg_data = std::move(jpeg_data);
     result->width = width;
@@ -211,35 +211,35 @@ std::shared_ptr<CaptureResult> ScreenCapture::captureScreen(int quality) {
 }
 
 bool ScreenCapture::captureWindowImage(HBITMAP& bitmap, int& width, int& height) {
-    // ��鴰���Ƿ���С��
+    // 检查窗口是否最小化
     if (IsIconic(game_window_)) {
-        spdlog::warn("��Ϸ��������С�����޷�����");
+        logWarn("游戏窗口已最小化，无法捕获");
         return false;
     }
 
-    // ��������λͼ
+    // 创建兼容位图
     bitmap = CreateCompatibleBitmap(window_dc_, width, height);
     if (!bitmap) {
-        spdlog::error("��������λͼʧ��");
+        logError("创建兼容位图失败");
         return false;
     }
 
-    // ѡ��λͼ���ڴ�DC
+    // 选择位图到内存DC
     HBITMAP old_bitmap = (HBITMAP)SelectObject(memory_dc_, bitmap);
 
-    // ���ƴ������ݵ�λͼ
+    // 复制窗口内容到位图
     BOOL result = PrintWindow(game_window_, memory_dc_, PW_CLIENTONLY);
 
     if (!result) {
-        // ���PrintWindowʧ�ܣ�����ʹ��BitBlt
+        // 如果PrintWindow失败，尝试使用BitBlt
         result = BitBlt(memory_dc_, 0, 0, width, height, window_dc_, 0, 0, SRCCOPY);
     }
 
-    // �ָ���λͼ
+    // 恢复旧位图
     SelectObject(memory_dc_, old_bitmap);
 
     if (!result) {
-        spdlog::error("���񴰿�����ʧ��");
+        logError("捕获窗口内容失败");
         DeleteObject(bitmap);
         bitmap = NULL;
         return false;
@@ -249,29 +249,29 @@ bool ScreenCapture::captureWindowImage(HBITMAP& bitmap, int& width, int& height)
 }
 
 std::vector<uint8_t> ScreenCapture::compressToJpeg(HBITMAP bitmap, int width, int height, int quality) {
-    // ����Bitmap����
+    // 创建Bitmap对象
     Bitmap* bmp = new Bitmap(bitmap, NULL);
     if (!bmp) {
-        spdlog::error("����GDI+ Bitmapʧ��");
+        logError("创建GDI+ Bitmap失败");
         return {};
     }
 
-    // ���λͼ�Ƿ���Ч
+    // 检查位图是否有效
     if (bmp->GetLastStatus() != Ok) {
-        spdlog::error("GDI+ Bitmap��Ч");
+        logError("GDI+ Bitmap无效");
         delete bmp;
         return {};
     }
 
-    // �����ڴ���
+    // 创建内存流
     IStream* istream = nullptr;
     CreateStreamOnHGlobal(NULL, TRUE, &istream);
 
-    // ����JPEG������
+    // 获取JPEG编码器
     CLSID jpegClsid;
     GetEncoderClsid(L"image/jpeg", &jpegClsid);
 
-    // ���ñ������
+    // 设置编码参数
     EncoderParameters encoderParams;
     encoderParams.Count = 1;
     encoderParams.Parameter[0].Guid = EncoderQuality;
@@ -280,35 +280,35 @@ std::vector<uint8_t> ScreenCapture::compressToJpeg(HBITMAP bitmap, int width, in
     ULONG qualityValue = quality;
     encoderParams.Parameter[0].Value = &qualityValue;
 
-    // ����ΪJPEG
+    // 保存为JPEG
     Status status = bmp->Save(istream, &jpegClsid, &encoderParams);
 
-    // ����λͼ
+    // 清理位图
     delete bmp;
 
     if (status != Ok) {
-        spdlog::error("����JPEGʧ��: {}", status);
+        logError_fmt("保存JPEG失败: {}", static_cast<int>(status));
         istream->Release();
         return {};
     }
 
-    // ��ȡ���ݴ�С
+    // 获取数据大小
     STATSTG stat;
     istream->Stat(&stat, STATFLAG_NONAME);
     ULONG size = stat.cbSize.LowPart;
 
-    // �����ڴ�
+    // 分配内存
     std::vector<uint8_t> buffer(size);
 
-    // ������λ��
+    // 重置位置
     LARGE_INTEGER li = { 0 };
     istream->Seek(li, STREAM_SEEK_SET, NULL);
 
-    // ��ȡ����
+    // 读取数据
     ULONG bytesRead;
     istream->Read(buffer.data(), size, &bytesRead);
 
-    // �ͷ���
+    // 释放流
     istream->Release();
 
     return buffer;

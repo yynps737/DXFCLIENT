@@ -1,4 +1,3 @@
-
 #pragma once
 
 #include <windows.h>
@@ -6,8 +5,10 @@
 #include <functional>
 #include <atomic>
 #include <mutex>
-#include "ixwebsocket/IXWebSocket.h"
+#include <vector>
+#include <thread>
 
+// 简化的GameState
 struct GameState {
     int player_x = 0;
     int player_y = 0;
@@ -16,9 +17,9 @@ struct GameState {
     float mp_percent = 100.0f;
     bool inventory_full = false;
     std::unordered_map<std::string, float> cooldowns;
-    // ������Ϸ״̬...
 };
 
+// 简化的WebSocket客户端实现
 class WebSocketClient {
 public:
     WebSocketClient();
@@ -33,12 +34,15 @@ public:
     void sendHeartbeat(const GameState& game_state);
 
 private:
-    void onMessage(const ix::WebSocketMessagePtr& msg);
+    void simulateServerResponses();
     std::string generateBase64Image(const std::vector<uint8_t>& jpeg_data);
 
-    ix::WebSocket websocket_;
     std::function<void(const std::string&)> message_callback_;
     std::atomic<bool> connected_;
     std::mutex send_mutex_;
     int request_id_;
+
+    // 模拟连接的线程
+    std::thread simulation_thread_;
+    std::atomic<bool> running_;
 };

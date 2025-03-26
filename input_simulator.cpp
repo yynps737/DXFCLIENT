@@ -1,267 +1,210 @@
-#define NOMINMAX  // Ìí¼ÓÔÚËùÓĞ°üº¬ÎÄ¼şÖ®Ç°
-#include <windows.h>
 #include "input_simulator.h"
-#include "spdlog/spdlog.h"
-#include <cmath>
+#include "LogWrapper.h"
+#include <map>
 #include <random>
+#include <algorithm>
 #include <chrono>
+#include <thread>
 
-
-// Ëæ»úÊıÉú³ÉÆ÷
-std::random_device rd;
-std::mt19937 gen(rd());
+// é”®ååˆ°è™šæ‹Ÿé”®ä»£ç çš„æ˜ å°„
+static std::map<std::string, UINT> key_map = {
+    {"a", 'A'}, {"b", 'B'}, {"c", 'C'}, {"d", 'D'}, {"e", 'E'}, {"f", 'F'}, {"g", 'G'}, {"h", 'H'},
+    {"i", 'I'}, {"j", 'J'}, {"k", 'K'}, {"l", 'L'}, {"m", 'M'}, {"n", 'N'}, {"o", 'O'}, {"p", 'P'},
+    {"q", 'Q'}, {"r", 'R'}, {"s", 'S'}, {"t", 'T'}, {"u", 'U'}, {"v", 'V'}, {"w", 'W'}, {"x", 'X'},
+    {"y", 'Y'}, {"z", 'Z'}, {"0", '0'}, {"1", '1'}, {"2", '2'}, {"3", '3'}, {"4", '4'}, {"5", '5'},
+    {"6", '6'}, {"7", '7'}, {"8", '8'}, {"9", '9'}, {"f1", VK_F1}, {"f2", VK_F2}, {"f3", VK_F3},
+    {"f4", VK_F4}, {"f5", VK_F5}, {"f6", VK_F6}, {"f7", VK_F7}, {"f8", VK_F8}, {"f9", VK_F9},
+    {"f10", VK_F10}, {"f11", VK_F11}, {"f12", VK_F12}, {"shift", VK_SHIFT}, {"ctrl", VK_CONTROL},
+    {"alt", VK_MENU}, {"tab", VK_TAB}, {"enter", VK_RETURN}, {"space", VK_SPACE}, {"esc", VK_ESCAPE},
+    {"backspace", VK_BACK}, {"up", VK_UP}, {"down", VK_DOWN}, {"left", VK_LEFT}, {"right", VK_RIGHT}
+};
 
 InputSimulator::InputSimulator() {
-    // ³õÊ¼»¯Î»ÖÃ
-    GetCursorPos(&last_mouse_pos_);
+    // è·å–å½“å‰é¼ æ ‡ä½ç½®
+    GetCursorPos(&current_mouse_pos_);
 }
 
-InputSimulator::~InputSimulator() {
-    // ÎŞĞèÌØÊâÇåÀí
-}
+InputSimulator::~InputSimulator() {}
 
 bool InputSimulator::initialize() {
-    // ³õÊ¼»¯¼üÅÌÓ³Éä
-    key_map_["escape"] = VK_ESCAPE;
-    key_map_["space"] = VK_SPACE;
-    key_map_["enter"] = VK_RETURN;
-    key_map_["tab"] = VK_TAB;
-
-    // ·½Ïò¼ü
-    key_map_["up"] = VK_UP;
-    key_map_["down"] = VK_DOWN;
-    key_map_["left"] = VK_LEFT;
-    key_map_["right"] = VK_RIGHT;
-
-    // ¹¦ÄÜ¼ü
-    key_map_["f1"] = VK_F1;
-    key_map_["f2"] = VK_F2;
-    key_map_["f3"] = VK_F3;
-    key_map_["f4"] = VK_F4;
-    key_map_["f5"] = VK_F5;
-    key_map_["f6"] = VK_F6;
-    key_map_["f7"] = VK_F7;
-    key_map_["f8"] = VK_F8;
-    key_map_["f9"] = VK_F9;
-    key_map_["f10"] = VK_F10;
-    key_map_["f11"] = VK_F11;
-    key_map_["f12"] = VK_F12;
-
-    // ĞŞÊÎ¼ü
-    key_map_["shift"] = VK_SHIFT;
-    key_map_["ctrl"] = VK_CONTROL;
-    key_map_["alt"] = VK_MENU;
-
-    // Êı×Ö¼üºÍ×ÖÄ¸¼ü
-    for (char c = '0'; c <= '9'; c++) {
-        std::string key_name(1, c);
-        key_map_[key_name] = c;
-    }
-
-    for (char c = 'a'; c <= 'z'; c++) {
-        std::string key_name(1, c);
-        key_map_[key_name] = toupper(c);  // ĞéÄâ¼ü´úÂëÊ¹ÓÃ´óĞ´×ÖÄ¸
-    }
-
-    // ÆäËû³£ÓÃ¼ü
-    key_map_["backspace"] = VK_BACK;
-    key_map_["delete"] = VK_DELETE;
-    key_map_["insert"] = VK_INSERT;
-    key_map_["home"] = VK_HOME;
-    key_map_["end"] = VK_END;
-    key_map_["pageup"] = VK_PRIOR;
-    key_map_["pagedown"] = VK_NEXT;
-
-    spdlog::info("ÊäÈëÄ£ÄâÆ÷³õÊ¼»¯Íê³É");
+    logInfo("è¾“å…¥æ¨¡æ‹Ÿå™¨åˆå§‹åŒ–");
     return true;
 }
 
-void InputSimulator::simulateKeyPress(const std::string& key) {
-    // ²éÕÒ¼ü´úÂë
-    auto it = key_map_.find(key);
-    if (it == key_map_.end()) {
-        spdlog::warn("Î´Öª¼ü: {}", key);
-        return;
-    }
-
-    int vk = it->second;
-
-    // Ä£Äâ°´¼ü
-    INPUT input[2] = { 0 };
-
-    // °´ÏÂ
-    input[0].type = INPUT_KEYBOARD;
-    input[0].ki.wVk = vk;
-
-    // ÊÍ·Å
-    input[1].type = INPUT_KEYBOARD;
-    input[1].ki.wVk = vk;
-    input[1].ki.dwFlags = KEYEVENTF_KEYUP;
-
-    // ·¢ËÍÊäÈë
-    UINT result = SendInput(2, input, sizeof(INPUT));
-    if (result != 2) {
-        spdlog::error("Ä£Äâ°´¼üÊ§°Ü: {}", key);
-    }
-
-    // Ìí¼ÓÈËÀà»¯ÑÓ³Ù
-    std::this_thread::sleep_for(std::chrono::milliseconds(getRandomDelay(50, 150)));
-}
-
-void InputSimulator::simulateKeyCombo(const std::vector<std::string>& keys) {
-    if (keys.empty()) {
-        return;
-    }
-
-    // ×¼±¸°´¼üÊäÈë
-    std::vector<INPUT> inputs;
-    std::vector<int> vk_codes;
-
-    // ÊÕ¼¯ËùÓĞÓĞĞ§µÄĞéÄâ¼ü´úÂë
-    for (const auto& key : keys) {
-        auto it = key_map_.find(key);
-        if (it != key_map_.end()) {
-            vk_codes.push_back(it->second);
-        }
-        else {
-            spdlog::warn("Î´Öª¼ü: {}", key);
-        }
-    }
-
-    if (vk_codes.empty()) {
-        return;
-    }
-
-    // °´ÏÂËùÓĞ¼ü
-    for (int vk : vk_codes) {
-        INPUT input = { 0 };
-        input.type = INPUT_KEYBOARD;
-        input.ki.wVk = vk;
-        inputs.push_back(input);
-    }
-
-    // ÊÍ·ÅËùÓĞ¼ü£¨ÄæĞò£©
-    for (auto it = vk_codes.rbegin(); it != vk_codes.rend(); ++it) {
-        INPUT input = { 0 };
-        input.type = INPUT_KEYBOARD;
-        input.ki.wVk = *it;
-        input.ki.dwFlags = KEYEVENTF_KEYUP;
-        inputs.push_back(input);
-    }
-
-    // ·¢ËÍÊäÈë
-    UINT result = SendInput(static_cast<UINT>(inputs.size()), inputs.data(), sizeof(INPUT));
-    if (result != inputs.size()) {
-        spdlog::error("Ä£Äâ×éºÏ¼üÊ§°Ü");
-    }
-
-    // Ìí¼ÓÈËÀà»¯ÑÓ³Ù
-    std::this_thread::sleep_for(std::chrono::milliseconds(getRandomDelay(80, 200)));
-}
-
 void InputSimulator::simulateMouseMove(int x, int y, bool smooth) {
-    POINT current_pos;
-    GetCursorPos(&current_pos);
-
     if (smooth) {
-        // Éú³ÉÆ½»¬Â·¾¶
-        std::vector<POINT> path = generateHumanMousePath(current_pos, { x, y });
+        // ä½¿ç”¨å¹³æ»‘ç§»åŠ¨
+        interpolateMouseMovement(current_mouse_pos_.x, current_mouse_pos_.y, x, y);
+    } else {
+        // ç›´æ¥ç§»åŠ¨
+        INPUT input = {0};
+        input.type = INPUT_MOUSE;
+        input.mi.dx = static_cast<LONG>(x * (65535.0f / GetSystemMetrics(SM_CXSCREEN)));
+        input.mi.dy = static_cast<LONG>(y * (65535.0f / GetSystemMetrics(SM_CYSCREEN)));
+        input.mi.dwFlags = MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_MOVE;
 
-        // ÑØÂ·¾¶ÒÆ¶¯
-        for (const auto& point : path) {
-            SetCursorPos(point.x, point.y);
-            std::this_thread::sleep_for(std::chrono::milliseconds(getRandomDelay(2, 10)));
-        }
-    }
-    else {
-        // Ö±½ÓÌøµ½Ä¿±êÎ»ÖÃ
-        SetCursorPos(x, y);
+        sendInputEvent(input);
     }
 
-    // ¸üĞÂ¼ÇÂ¼µÄÎ»ÖÃ
-    last_mouse_pos_.x = x;
-    last_mouse_pos_.y = y;
+    // æ›´æ–°å½“å‰é¼ æ ‡ä½ç½®
+    current_mouse_pos_.x = x;
+    current_mouse_pos_.y = y;
 }
 
 void InputSimulator::simulateMouseClick(int x, int y, bool right_button) {
-    // ÏÈÒÆ¶¯µ½Î»ÖÃ
+    // å…ˆç§»åŠ¨åˆ°æŒ‡å®šä½ç½®
     simulateMouseMove(x, y);
 
-    // ×¼±¸Êó±êÊäÈë
-    INPUT input[2] = { 0 };
+    // ç„¶åç‚¹å‡»
+    INPUT input = {0};
+    input.type = INPUT_MOUSE;
+    input.mi.dwFlags = right_button ? MOUSEEVENTF_RIGHTDOWN : MOUSEEVENTF_LEFTDOWN;
+    sendInputEvent(input);
 
-    // °´ÏÂ
-    input[0].type = INPUT_MOUSE;
-    input[0].mi.dwFlags = right_button ? MOUSEEVENTF_RIGHTDOWN : MOUSEEVENTF_LEFTDOWN;
+    // æ¨¡æ‹Ÿäººç±»ç‚¹å‡»çš„çŸ­æš‚åœé¡¿
+    std::this_thread::sleep_for(std::chrono::milliseconds(50 + (std::rand() % 50)));
 
-    // ÊÍ·Å
-    input[1].type = INPUT_MOUSE;
-    input[1].mi.dwFlags = right_button ? MOUSEEVENTF_RIGHTUP : MOUSEEVENTF_LEFTUP;
+    // é‡Šæ”¾é¼ æ ‡æŒ‰é’®
+    input.mi.dwFlags = right_button ? MOUSEEVENTF_RIGHTUP : MOUSEEVENTF_LEFTUP;
+    sendInputEvent(input);
+}
 
-    // ·¢ËÍÊäÈë
-    UINT result = SendInput(2, input, sizeof(INPUT));
-    if (result != 2) {
-        spdlog::error("Ä£ÄâÊó±êµã»÷Ê§°Ü");
+void InputSimulator::simulateKeyPress(const std::string& key) {
+    UINT vk = mapKeyNameToVirtualKey(key);
+    if (vk == 0) {
+        logError_fmt("æœªçŸ¥æŒ‰é”®: {}", key);
+        return;
     }
 
-    // Ä£ÄâÈËÀà»¯µÄµã»÷ºóÔİÍ£
-    std::this_thread::sleep_for(std::chrono::milliseconds(getRandomDelay(50, 200)));
+    // æŒ‰ä¸‹æŒ‰é”®
+    sendKeyDown(vk);
+
+    // çŸ­æš‚åœé¡¿
+    std::this_thread::sleep_for(std::chrono::milliseconds(50 + (std::rand() % 30)));
+
+    // é‡Šæ”¾æŒ‰é”®
+    sendKeyUp(vk);
 }
 
-void InputSimulator::simulateMouseDoubleClick(int x, int y) {
-    // ½øĞĞÁ½´Îµã»÷²Ù×÷£¬¼ä¸ôÊ±¼äÄ£ÄâË«»÷
-    simulateMouseClick(x, y);
-    std::this_thread::sleep_for(std::chrono::milliseconds(getRandomDelay(40, 80)));
-    simulateMouseClick(x, y);
-}
+void InputSimulator::simulateKeyCombo(const std::vector<std::string>& keys) {
+    std::vector<UINT> vk_keys;
 
-// Éú³ÉÈËÀà»¯Êó±ê¹ì¼£
-std::vector<POINT> InputSimulator::generateHumanMousePath(POINT start, POINT end, int steps) {
-    std::vector<POINT> path;
-
-    // ¼ÆËã¾àÀë
-    double distance = std::sqrt(std::pow(end.x - start.x, 2) + std::pow(end.y - start.y, 2));
-
-    // ¸ù¾İ¾àÀëµ÷Õû²½Êı
-    if (steps <= 0) {
-        steps = static_cast<int>(distance / 10.0);
-        steps = std::max(5, std::min(50, steps)); // ÏŞÖÆÔÚºÏÀí·¶Î§ÄÚ
+    // è½¬æ¢æ‰€æœ‰é”®åä¸ºè™šæ‹Ÿé”®ä»£ç 
+    for (const auto& key : keys) {
+        UINT vk = mapKeyNameToVirtualKey(key);
+        if (vk != 0) {
+            vk_keys.push_back(vk);
+        } else {
+            logWarn_fmt("æœªçŸ¥æŒ‰é”®è¢«å¿½ç•¥: {}", key);
+        }
     }
 
-    // Éú³ÉÂ·¾¶µã
-    for (int i = 0; i < steps; i++) {
-        double t = static_cast<double>(i) / (steps - 1);
-
-        // BezierÇúÏß¿ØÖÆµã£¨Ìí¼ÓËæ»úÆ«ÒÆÊ¹ÇúÏß¸ü×ÔÈ»£©
-        double cp_x = start.x + (end.x - start.x) * 0.5 + addHumanJitter(0, 10);
-        double cp_y = start.y + (end.y - start.y) * 0.5 + addHumanJitter(0, 10);
-
-        // ¶ş´ÎBezierÇúÏß
-        double x = std::pow(1 - t, 2) * start.x + 2 * (1 - t) * t * cp_x + std::pow(t, 2) * end.x;
-        double y = std::pow(1 - t, 2) * start.y + 2 * (1 - t) * t * cp_y + std::pow(t, 2) * end.y;
-
-        // Ìí¼ÓÎ¢Ğ¡¶¶¶¯
-        x += addHumanJitter(0, 1);
-        y += addHumanJitter(0, 1);
-
-        POINT p = { static_cast<LONG>(x), static_cast<LONG>(y) };
-        path.push_back(p);
+    if (vk_keys.empty()) {
+        logError("æ²¡æœ‰æœ‰æ•ˆçš„æŒ‰é”®");
+        return;
     }
 
-    // È·±£×îºóÒ»¸öµãÊÇÄ¿±êÎ»ÖÃ
-    path.back() = end;
+    // æŒ‰ä¸‹æ‰€æœ‰æŒ‰é”®
+    for (UINT vk : vk_keys) {
+        sendKeyDown(vk);
+        std::this_thread::sleep_for(std::chrono::milliseconds(30));
+    }
 
-    return path;
+    // çŸ­æš‚åœé¡¿
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    // æŒ‰ç›¸åé¡ºåºé‡Šæ”¾æ‰€æœ‰æŒ‰é”®
+    for (auto it = vk_keys.rbegin(); it != vk_keys.rend(); ++it) {
+        sendKeyUp(*it);
+        std::this_thread::sleep_for(std::chrono::milliseconds(30));
+    }
 }
 
-// Ìí¼ÓÈËÀà»¯¶¶¶¯
-int InputSimulator::addHumanJitter(int value, int range) {
-    std::uniform_int_distribution<> dist(-range, range);
-    return value + dist(gen);
+int InputSimulator::addHumanJitter(int value, int max_jitter) {
+    // æ·»åŠ ä¸€ä¸ªéšæœºåç§»ï¼Œæ¨¡æ‹Ÿäººç±»è¾“å…¥çš„ä¸ç²¾ç¡®æ€§
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> distrib(-max_jitter, max_jitter);
+
+    return value + distrib(gen);
 }
 
-// Éú³ÉËæ»úÑÓ³Ù
-int InputSimulator::getRandomDelay(int min_ms, int max_ms) {
-    std::uniform_int_distribution<> dist(min_ms, max_ms);
-    return dist(gen);
+UINT InputSimulator::mapKeyNameToVirtualKey(const std::string& key_name) {
+    std::string lower_key = key_name;
+    std::transform(lower_key.begin(), lower_key.end(), lower_key.begin(),
+                   [](unsigned char c){ return std::tolower(c); });
+
+    auto it = key_map.find(lower_key);
+    if (it != key_map.end()) {
+        return it->second;
+    }
+
+    // å°è¯•è§£æå•ä¸ªå­—ç¬¦æŒ‰é”®
+    if (lower_key.length() == 1) {
+        return static_cast<UINT>(std::toupper(lower_key[0]));
+    }
+
+    return 0;  // æœªçŸ¥æŒ‰é”®
+}
+
+void InputSimulator::sendInputEvent(INPUT& input_event) {
+    if (SendInput(1, &input_event, sizeof(INPUT)) != 1) {
+        logError_fmt("å‘é€è¾“å…¥äº‹ä»¶å¤±è´¥ï¼Œé”™è¯¯ç : {}", GetLastError());
+    }
+}
+
+void InputSimulator::sendKeyDown(UINT virtual_key) {
+    INPUT input = {0};
+    input.type = INPUT_KEYBOARD;
+    input.ki.wVk = virtual_key;
+    input.ki.dwFlags = 0;  // æŒ‰é”®æŒ‰ä¸‹
+    sendInputEvent(input);
+}
+
+void InputSimulator::sendKeyUp(UINT virtual_key) {
+    INPUT input = {0};
+    input.type = INPUT_KEYBOARD;
+    input.ki.wVk = virtual_key;
+    input.ki.dwFlags = KEYEVENTF_KEYUP;  // æŒ‰é”®é‡Šæ”¾
+    sendInputEvent(input);
+}
+
+void InputSimulator::interpolateMouseMovement(int start_x, int start_y, int end_x, int end_y) {
+    // è®¡ç®—ç§»åŠ¨è·ç¦»
+    int dx = end_x - start_x;
+    int dy = end_y - start_y;
+    double distance = std::sqrt(dx*dx + dy*dy);
+
+    // æ ¹æ®è·ç¦»ç¡®å®šæ­¥æ•°
+    int steps = std::max(10, static_cast<int>(distance / 10.0));
+
+    // æ·»åŠ ä¸€äº›éšæœºæ€§ï¼Œä½¿ç§»åŠ¨çœ‹èµ·æ¥æ›´è‡ªç„¶
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::normal_distribution<> speed_distrib(15.0, 5.0);  // ç§»åŠ¨é€Ÿåº¦åˆ†å¸ƒ
+
+    for (int i = 1; i <= steps; ++i) {
+        // è®¡ç®—å½“å‰æ­¥çš„ä½ç½®
+        int x = start_x + static_cast<int>((dx * i) / steps);
+        int y = start_y + static_cast<int>((dy * i) / steps);
+
+        // æ·»åŠ ä¸€äº›å¾®å°æŠ–åŠ¨
+        if (i != steps) {  // ä¸åœ¨æœ€åä¸€æ­¥æ·»åŠ æŠ–åŠ¨
+            std::uniform_int_distribution<> jitter(-2, 2);
+            x += jitter(gen);
+            y += jitter(gen);
+        }
+
+        // ç§»åŠ¨é¼ æ ‡
+        INPUT input = {0};
+        input.type = INPUT_MOUSE;
+        input.mi.dx = static_cast<LONG>(x * (65535.0f / GetSystemMetrics(SM_CXSCREEN)));
+        input.mi.dy = static_cast<LONG>(y * (65535.0f / GetSystemMetrics(SM_CYSCREEN)));
+        input.mi.dwFlags = MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_MOVE;
+        sendInputEvent(input);
+
+        // æ¨¡æ‹Ÿäººç±»ç§»åŠ¨çš„å˜é€Ÿ
+        double speed = std::max(5.0, speed_distrib(gen));
+        std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>(1000.0 / speed)));
+    }
 }
