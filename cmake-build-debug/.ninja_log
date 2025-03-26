@@ -1,0 +1,8 @@
+# ninja log v6
+5	551	7647202199364371	CMakeFiles/DNFAutomation.dir/base64.cpp.obj	1a7afe4f47c821c6
+16	3905	7647202199471127	CMakeFiles/DNFAutomation.dir/input_simulator.cpp.obj	eed50a6d984ab2c
+21	4114	7647202199518441	CMakeFiles/DNFAutomation.dir/screen_capture.cpp.obj	d8ae88bbc716cb82
+26	4378	7647202199567674	CMakeFiles/DNFAutomation.dir/websocket_client.cpp.obj	f0a3320f6a8122f0
+13	4667	7647203090015831	CMakeFiles/DNFAutomation.dir/client.cpp.obj	25a7fc8e7f282016
+8	2667	7647203089955772	CMakeFiles/DNFAutomation.dir/main.cpp.obj	3033d8e93ef96646
+9	2932	7647204023542414	CMakeFiles/DNFAutomation.dir/main.cpp.obj	3033d8e93ef96646

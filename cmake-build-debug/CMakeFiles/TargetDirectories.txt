@@ -1,0 +1,3 @@
+C:/Users/kiikboy/CLionProjects/DNFAutomation/cmake-build-debug/CMakeFiles/DNFAutomation.dir
+C:/Users/kiikboy/CLionProjects/DNFAutomation/cmake-build-debug/CMakeFiles/edit_cache.dir
+C:/Users/kiikboy/CLionProjects/DNFAutomation/cmake-build-debug/CMakeFiles/rebuild_cache.dir
